@@ -7,7 +7,7 @@ on:
 
 env:
   IMAGE_NAME: es-with-sudachi
-  ELASTIC_VER: 7.10.2
+  ELASTIC_VER: 7.17.19
   SUDACHI_PLUGIN_VER: 3.1.0
 
 jobs:
