@@ -6,105 +6,41 @@ on:
       - master
 
 env:
-  IMAGE_NAME: es-with-sudachi-crowi
+  IMAGE_NAME: es-with-sudachi
   ELASTIC_VER: 7.10.2
-  SUDACHI_VER: 0.5.3-SNAPSHOT
   SUDACHI_PLUGIN_VER: 3.1.0
 
 jobs:
   build-image:
-    name: Build Images
+    name: Build Image
     runs-on: ubuntu-latest
     steps:
       - name: Set IMAGE_TAG env
         run: echo "IMAGE_TAG=${ELASTIC_VER}-${SUDACHI_PLUGIN_VER}" >> $GITHUB_ENV
 
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-      - name: Checkout WorksApplications/Sudachi
-        uses: actions/checkout@v2
-        with:
-          repository: WorksApplications/Sudachi
-          ref: 3573ddaaf441a5ea042caa2ecee3f87d7eaf7089
-          path: Sudachi
-      - name: Check sudachi ver
-        id: check-sudachi-ver
-        run: |
-          cd Sudachi
-          VERSION=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
-          echo "::set-output name=version::${VERSION}"
-      - name: Assert sudachi ver
-        uses: nick-invision/assert-action@v1
-        with:
-          expected: ${{ env.SUDACHI_VER }}
-          actual: ${{ steps.check-sudachi-ver.outputs.version }}
-      - name: Build and install sudachi
-        run: |
-          cd Sudachi
-          mvn install
+      - uses: actions/checkout@v4
 
-      - name: Checkout WorksApplications/elasticsearch-sudachi
-        uses: actions/checkout@v2
-        with:
-          repository: WorksApplications/elasticsearch-sudachi
-          ref: 60a790e811abc680f0aa7a90859cd8641bc18d99
-          path: elasticsearch-sudachi
-      - name: Check elasticsearch-sudachi ver
-        id: check-es-sudachi-ver
-        run: |
-          cd elasticsearch-sudachi
-          VERSION=$(./gradlew properties --no-daemon --console=plain -q | grep "^version:" | awk '{printf $2}')
-          echo "::set-output name=version::${VERSION}"
-      - name: Assert elasticsearch-sudachi ver
-        uses: nick-invision/assert-action@v1
-        with:
-          expected: ${{ env.SUDACHI_PLUGIN_VER }}
-          actual: ${{ steps.check-es-sudachi-ver.outputs.version }}
-      - name: Edit build.gradle
-        run: |
-          cd elasticsearch-sudachi
-          sed -i 's/mavenCentral()/mavenCentral()\n    mavenLocal()/g' build.gradle
-          sed -i "s/com.worksap.nlp:sudachi:0.5.1/com.worksap.nlp:sudachi:${SUDACHI_VER}/g" build.gradle
-      - name: Build distZip
-        run: |
-          cd elasticsearch-sudachi
-          ./gradlew -q -PelasticsearchVersion=7.10.2 distZip
-
-      - uses: actions/checkout@v2
-        with:
-          path: es-builder
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: all
-      - name: Set up Docker Buildx
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
         id: buildx
-        uses: docker/setup-buildx-action@v1
-        with:
-          version: latest
+      - name: Builder instance name
+        run: echo ${{ steps.buildx.outputs.name }}
+      - name: Available platforms
+        run: echo ${{ steps.buildx.outputs.platforms }}
 
-      - name: Copy built plugin
-        run: cp elasticsearch-sudachi/build/distributions/analysis-sudachi-${ELASTIC_VER}-${SUDACHI_PLUGIN_VER}.zip es-builder/
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: traptitech
+          username: s9-sukyu
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
-        uses: docker/build-push-action@v2
+
+      - uses: docker/build-push-action@v5
         with:
-          context: es-builder
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: |
             ELASTIC_VER=${{ env.ELASTIC_VER }}
             SUDACHI_PLUGIN_VER=${{ env.SUDACHI_PLUGIN_VER }}
           tags: |
-            ghcr.io/traptitech/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ghcr.io/s9-sukyu/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
